@@ -7,7 +7,8 @@ import base64
 import json
 import pymysql
 from datetime import datetime
-
+import pandas as pd
+import jsonpath ## pip3 install jsonpath --user
 
 ## spotify access info
 client_id = "55c44a45388048d88dd64df9ec727859"
@@ -32,22 +33,70 @@ def main():
     headers = get_headers(client_id, client_secret)
 
     ## RDS 아티스트 ID를 가져오고
-    cursor.execute("SELECT id FROM artist")
+    cursor.execute("SELECT id FROM artist LIMIT 10")
+
+    top_track_keys = {
+        "id" : "id",
+        "name" : "name",
+        "popularity" : "popularity",
+        "external_url" : "external_urls.spotify"
+    }
+
+    ## Top Tracks Spotify 가져오고
+    top_tracks = []
+    for (id, ) in cursor.fetchall():
+        URL = "https://api.spotify.com/v1/artists/{}/top-tracks".format(id)
+        params = {
+            'country' : 'US'
+        }
+        r = requests.get(URL, params = params, headers = headers)
+        raw = json.loads(r.text)
+
+        for i in raw['tracks']:
+            top_track = {}
+            for k, v in top_track_keys.items():
+                top_track.update({k : jsonpath.jsonpath(i,v)})
+                top_track.update({'artist_id':id})
+                top_tracks.append(top_track)
+
+    ## track_ids
+    tracks_ids = [i['id'][0] for i in top_tracks]
+
+    ## List of dictionaries
+    top_tracks = pd.DataFrame(top_tracks)
+    top_tracks.to_parquet('top-tracks.parquet', engine='pyarrow', compression='snappy')
     
     dt = datetime.utcnow().strftime("%Y-%m-%d")
-    print(dt)
-
-    sys.exit(0)
-
-    with open('top_tracks.json', 'w') as f:
-        for i in top_tracks:
-            json.dump(i,f)
-            f.write(os.linesep)
 
     s3 = boto3.resource('s3')
-    object = s3.object('spotify-artists-api', 'dt={}/top-tracks.json'.format(dt))
-
+    #object = s3.object('spotify-artists-api', 'dt={}/top-tracks.json'.format(dt)) #json 형식으로 저장
+    object = s3.object('spotify-artists-api', 'top-tracks/dt={}/top-tracks.parquet'.format(dt))    # parquet 형식으로 저장
+    data = open('top-tracks.parquet', 'rb')
+    object.put(Body=data)
+    
     ## S3 import
+    tracks_batch = [tracks_ids[i: i+100] for in range(0, len(track_ids), 100)]
+
+    audio_features = []
+    for i in tracks_batch"
+        ids = ','.join(i)
+        URL = "https://api.spotify.com/v1/audio-features/?ids={}".format(ids)
+
+        r = requests.get(URL, headers=headers)
+        raw = json.loads(r.text)
+
+        audo.features.extend(raw['audio_features'])
+
+    audio_features = pd.DataFrame(audio_features)
+    audio_features.to_parquet('audio-features.parquet', engine='pyarrow', compression='snappy')
+
+    s3 = boto3.resource('s3')
+    #object = s3.object('spotify-artists-api', 'dt={}/top-tracks.json'.format(dt)) #json 형식으로 저장
+    object = s3.object('spotify-artists-api', 'audio-features/dt={}/top-tracks.parquet'.format(dt))    # parquet 형식으로 저장
+    data = open('audio-features.parquet', 'rb')
+    object.put(Body=data)        
+
+
 
 
 
