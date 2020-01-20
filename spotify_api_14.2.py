@@ -60,7 +60,10 @@ def main():
                 top_tracks.append(top_track)
 
     ## track_ids
-    tracks_ids = [i['id'][0] for i in top_tracks]
+    track_ids = [i['id'][0] for i in top_tracks]
+    
+    #print(track_ids)
+    #sys.exit(0)
 
     ## List of dictionaries
     top_tracks = pd.DataFrame(top_tracks)
@@ -70,29 +73,29 @@ def main():
 
     s3 = boto3.resource('s3')
     #object = s3.object('spotify-artists-api', 'dt={}/top-tracks.json'.format(dt)) #json 형식으로 저장
-    object = s3.object('spotify-artists-api', 'top-tracks/dt={}/top-tracks.parquet'.format(dt))    # parquet 형식으로 저장
+    object = s3.Object('spotify-artists-api', 'top-tracks/dt={}/top-tracks.parquet'.format(dt))    # parquet 형식으로 저장
     data = open('top-tracks.parquet', 'rb')
     object.put(Body=data)
     
     ## S3 import
-    tracks_batch = [tracks_ids[i: i+100] for in range(0, len(track_ids), 100)]
+    tracks_batch = [track_ids[i : i+100] for i in range(0, len(track_ids), 100)]
 
     audio_features = []
-    for i in tracks_batch"
+    for i in tracks_batch:
         ids = ','.join(i)
         URL = "https://api.spotify.com/v1/audio-features/?ids={}".format(ids)
 
         r = requests.get(URL, headers=headers)
         raw = json.loads(r.text)
 
-        audo.features.extend(raw['audio_features'])
+        audio_features.extend(raw['audio_features'])
 
     audio_features = pd.DataFrame(audio_features)
     audio_features.to_parquet('audio-features.parquet', engine='pyarrow', compression='snappy')
 
     s3 = boto3.resource('s3')
     #object = s3.object('spotify-artists-api', 'dt={}/top-tracks.json'.format(dt)) #json 형식으로 저장
-    object = s3.object('spotify-artists-api', 'audio-features/dt={}/top-tracks.parquet'.format(dt))    # parquet 형식으로 저장
+    object = s3.Object('spotify-artists-api', 'audio-features/dt={}/top-tracks.parquet'.format(dt))    # parquet 형식으로 저장
     data = open('audio-features.parquet', 'rb')
     object.put(Body=data)        
 
