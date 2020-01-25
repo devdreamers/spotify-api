@@ -7,7 +7,8 @@ import base64
 import json
 import pymysql
 from datetime import datetime
-
+import pandas as pd
+import jsonpath ## pip3 install jsonpath --user
 
 ## spotify access info
 client_id = "55c44a45388048d88dd64df9ec727859"
@@ -100,11 +101,11 @@ def main():
     audio_features.to_parquet('audio-features.parquet', engine='pyarrow', compression='snappy')
 
     s3 = boto3.resource('s3')
-    object = s3.Object('spotify-artists', 'audio-features/dt={}/top-tracks.parquet'.format(dt))
+
+    #object = s3.object('spotify-artists-api', 'dt={}/top-tracks.json'.format(dt)) #json 형식으로 저장
+    object = s3.Object('spotify-artists-api', 'audio-features/dt={}/top-tracks.parquet'.format(dt))    # parquet 형식으로 저장
     data = open('audio-features.parquet', 'rb')
-    object.put(Body=data)
-
-
+    object.put(Body=data)        
 
 
 def get_headers(client_id, client_secret):
